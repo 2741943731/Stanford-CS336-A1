@@ -11,7 +11,8 @@ from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from cs336_basics.BPEtokenizer import run_train_bpe as BPE
+from cs336_basics.BPEtrainer import run_train_bpe as BPE
+from cs336_basics.Tokenizer import Tokenizer
 
 
 def run_linear(
@@ -563,7 +564,7 @@ def get_tokenizer(
     Returns:
         A BPE tokenizer that uses the provided vocab, merges, and special tokens.
     """
-    raise NotImplementedError
+    return Tokenizer(vocab, merges, special_tokens)
 
 
 def run_train_bpe(
