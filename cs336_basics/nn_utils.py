@@ -50,3 +50,17 @@ class RMSNorm(nn.Module):
         x = x / rms
         return einsum(x, self.g, "... d_model, d_model -> ... d_model").to(self.dtype)
 
+class SwiGLU(nn.Module):
+    def __init__(self, d_model: int, d_ff: int):
+        super().__init__()
+        self.d_model = d_model
+        self.d_ff = d_ff
+        self.w1 = LinearModule(d_model, d_ff)
+        self.w2 = LinearModule(d_ff, d_model)
+        self.w3 = LinearModule(d_model, d_ff)
+
+    def SiLU(self, x):
+        return x * torch.sigmoid(x)
+
+    def forward(self, x):
+        return self.w2(self.SiLU(self.w1(x)) * self.w3(x))
