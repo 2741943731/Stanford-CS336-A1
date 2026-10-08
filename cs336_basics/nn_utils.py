@@ -64,3 +64,35 @@ class SwiGLU(nn.Module):
 
     def forward(self, x):
         return self.w2(self.SiLU(self.w1(x)) * self.w3(x))
+
+class RoPE(nn.Module):
+    def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
+        super().__init__()
+        self.theta = theta
+        self.d_k = d_k
+        self.max_seq_len = max_seq_len
+        self.device = device
+
+        pos = torch.arange(self.max_seq_len)
+        freq = 1 / (self.theta ** (torch.arange(0, d_k, 2).float() / self.d_k))
+
+        angle = pos[:, None] * freq[None, :]
+        self.register_buffer("cos", angle.cos())
+        self.register_buffer("sin", angle.sin())
+
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+        """
+        x (... seq, d)
+        token_positions (... seq)
+        """
+        cos = self.cos[token_positions]
+        sin = self.sin[token_positions]
+
+        x_even = x[...,0::2]
+        x_odd = x[...,1::2]
+
+        x_even_rotated = x_even * cos - x_odd * sin
+        x_odd_rotated = x_even * sin + x_odd * cos
+
+        return torch.stack([x_even_rotated, x_odd_rotated], dim=-1).flatten(-2)
+

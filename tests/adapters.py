@@ -13,7 +13,7 @@ from torch import Tensor
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from cs336_basics.BPEtrainer import run_train_bpe as BPE
 from cs336_basics.Tokenizer import Tokenizer
-from cs336_basics.nn_utils import LinearModule, EmbeddingModule, RMSNorm, SwiGLU
+from cs336_basics.nn_utils import LinearModule, EmbeddingModule, RMSNorm, SwiGLU, RoPE
 
 
 def run_linear(
@@ -215,7 +215,8 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    model = RoPE(theta, d_k, max_seq_len)
+    return model(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
