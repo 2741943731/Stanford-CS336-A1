@@ -96,3 +96,9 @@ class RoPE(nn.Module):
 
         return torch.stack([x_even_rotated, x_odd_rotated], dim=-1).flatten(-2)
 
+
+def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
+    x_max = torch.max(x, dim=dim, keepdim=True)[0]
+    x_exp = torch.exp(x - x_max)
+    return x_exp / x_exp.sum(dim=dim, keepdim=True)
+
