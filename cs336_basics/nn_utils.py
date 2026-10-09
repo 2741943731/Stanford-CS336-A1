@@ -7,7 +7,7 @@ from torch import nn
 from einops import rearrange, einsum
 from torch.nn import functional as F
 
-class LinearModule(nn.Module):
+class Linear(nn.Module):
     def __init__(self, in_features: int, out_features: int, device: torch.device | None = None, dtype: torch.dtype | None = None):
         super().__init__()
         self.in_features = in_features
@@ -21,7 +21,7 @@ class LinearModule(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return einsum(x, self.W, "... d_in, d_out d_in -> ... d_out")
 
-class EmbeddingModule(nn.Module):
+class Embedding(nn.Module):
     def __init__(self, num_embeddings: int, embedding_dim: int, device: torch.device | None = None, dtype: torch.dtype | None = None):
         super().__init__()
         self.num_embeddings = num_embeddings
@@ -55,9 +55,9 @@ class SwiGLU(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.d_ff = d_ff
-        self.w1 = LinearModule(d_model, d_ff)
-        self.w2 = LinearModule(d_ff, d_model)
-        self.w3 = LinearModule(d_model, d_ff)
+        self.w1 = Linear(d_model, d_ff)
+        self.w2 = Linear(d_ff, d_model)
+        self.w3 = Linear(d_model, d_ff)
 
     def SiLU(self, x):
         return x * torch.sigmoid(x)

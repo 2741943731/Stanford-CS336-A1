@@ -13,8 +13,8 @@ from torch import Tensor
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from cs336_basics.BPEtrainer import run_train_bpe as BPE
 from cs336_basics.Tokenizer import Tokenizer
-from cs336_basics.nn_utils import LinearModule, EmbeddingModule, RMSNorm, SwiGLU, RoPE, softmax
-from cs336_basics.model import ScaledDotProductAttention, CausalMultiHeadAttention
+from cs336_basics.nn_utils import Linear, Embedding, RMSNorm, SwiGLU, RoPE, softmax
+from cs336_basics.model import ScaledDotProductAttention, CausalMultiHeadAttention, TransfromerBlock
 
 
 def run_linear(
@@ -35,7 +35,7 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
-    model = LinearModule(d_in, d_out)
+    model = Linear(d_in, d_out)
     with torch.no_grad():
         model.W.copy_(weights)
     return model(in_features)
@@ -59,7 +59,7 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
-    model = EmbeddingModule(vocab_size, d_model)
+    model = Embedding(vocab_size, d_model)
     with torch.no_grad():
         model.embedding.copy_(weights)
     return model(token_ids)
@@ -155,8 +155,12 @@ def run_multihead_self_attention(
         implementation with the given QKV projection weights and input features.
     """
     model = CausalMultiHeadAttention(d_model, num_heads)
-    return model(in_features, q_proj_weight, k_proj_weight, v_proj_weight, o_proj_weight)
-
+    with torch.no_grad():
+        model.Wv.copy_(v_proj_weight)
+        model.Wk.copy_(k_proj_weight)
+        model.Wq.copy_(q_proj_weight)
+        model.Wo.copy_(o_proj_weight)
+    return model(in_features)
 
 def run_multihead_self_attention_with_rope(
     d_model: int,
@@ -196,8 +200,12 @@ def run_multihead_self_attention_with_rope(
         implementation with the given QKV projection weights and input features.
     """
     model = CausalMultiHeadAttention(d_model, num_heads, max_seq_len, theta)
-    
-    return model(in_features, q_proj_weight, k_proj_weight, v_proj_weight, o_proj_weight, token_positions)
+    with torch.no_grad():
+        model.Wv.copy_(v_proj_weight)
+        model.Wk.copy_(k_proj_weight)
+        model.Wq.copy_(q_proj_weight)
+        model.Wo.copy_(o_proj_weight)
+    return model(in_features, token_positions)
 
 
 def run_rope(
@@ -293,7 +301,18 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    model = TransfromerBlock(d_model, num_heads, d_ff, max_seq_len, theta)
+    with torch.no_grad():
+        model.causalMultiHeadSelfAttentionWithRoPE.Wq.copy_(weights['attn.q_proj.weight'])
+        model.causalMultiHeadSelfAttentionWithRoPE.Wk.copy_(weights['attn.k_proj.weight'])
+        model.causalMultiHeadSelfAttentionWithRoPE.Wv.copy_(weights['attn.v_proj.weight'])
+        model.causalMultiHeadSelfAttentionWithRoPE.Wo.copy_(weights['attn.output_proj.weight'])
+        model.ffn.w1.W.copy_(weights['ffn.w1.weight'])
+        model.ffn.w2.W.copy_(weights['ffn.w2.weight'])
+        model.ffn.w3.W.copy_(weights['ffn.w3.weight'])
+        model.norm1.g.copy_(weights['ln1.weight'])
+        model.norm2.g.copy_(weights['ln2.weight'])
+    return model(in_features)
 
 
 def run_transformer_lm(
