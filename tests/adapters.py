@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from cs336_basics.BPEtrainer import run_train_bpe as BPE
 from cs336_basics.Tokenizer import Tokenizer
 from cs336_basics.nn_utils import Linear, Embedding, RMSNorm, SwiGLU, RoPE, softmax
-from cs336_basics.model import ScaledDotProductAttention, CausalMultiHeadAttention, TransfromerBlock
+from cs336_basics.model import ScaledDotProductAttention, CausalMultiHeadAttention, TransformerBlock, TransformerLM
 
 
 def run_linear(
@@ -301,7 +301,7 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    model = TransfromerBlock(d_model, num_heads, d_ff, max_seq_len, theta)
+    model = TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta)
     with torch.no_grad():
         model.causalMultiHeadSelfAttentionWithRoPE.Wq.copy_(weights['attn.q_proj.weight'])
         model.causalMultiHeadSelfAttentionWithRoPE.Wk.copy_(weights['attn.k_proj.weight'])
@@ -394,7 +394,26 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    model = TransformerLM(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta)
+    with torch.no_grad():
+        model.tokenEmbedding.embedding.copy_(weights['token_embeddings.weight'])
+        model.norm.g.copy_(weights['ln_final.weight'])
+        model.outputEmbedding.W.copy_(weights['lm_head.weight'])
+        for i, block in enumerate(model.transformerBlocks):
+            keyQ, keyK, keyV, keyO = f"layers.{i}.attn.q_proj.weight", f"layers.{i}.attn.k_proj.weight", f"layers.{i}.attn.v_proj.weight", f"layers.{i}.attn.output_proj.weight"
+            keyln1, keyln2 = f"layers.{i}.ln1.weight", f"layers.{i}.ln2.weight"
+            keyffnw1, keyffnw2, keyffnw3 = f"layers.{i}.ffn.w1.weight", f"layers.{i}.ffn.w2.weight", f"layers.{i}.ffn.w3.weight"
+            block.causalMultiHeadSelfAttentionWithRoPE.Wq.copy_(weights[keyQ])
+            block.causalMultiHeadSelfAttentionWithRoPE.Wk.copy_(weights[keyK])
+            block.causalMultiHeadSelfAttentionWithRoPE.Wv.copy_(weights[keyV])
+            block.causalMultiHeadSelfAttentionWithRoPE.Wo.copy_(weights[keyO])
+            block.ffn.w1.W.copy_(weights[keyffnw1])
+            block.ffn.w2.W.copy_(weights[keyffnw2])
+            block.ffn.w3.W.copy_(weights[keyffnw3])
+            block.norm1.g.copy_(weights[keyln1])
+            block.norm2.g.copy_(weights[keyln2])
+
+    return model(in_indices)
 
 
 def run_rmsnorm(
