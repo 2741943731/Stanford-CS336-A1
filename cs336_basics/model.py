@@ -105,6 +105,7 @@ class TransformerLM(nn.Module):
         for layer in self.transformerBlocks:
             x = layer(x)
         x = self.norm(x)
-        x = self.outputEmbedding(x)
-        # logits = softmax(x, dim=-1)
-        return x
+        logits = self.outputEmbedding(x)
+        # out = softmax(logits, dim=-1)
+        # 损失函数会包含softmax
+        return logits
