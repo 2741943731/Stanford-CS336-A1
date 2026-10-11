@@ -19,6 +19,7 @@ from cs336_basics.crossEntropy import CrossEntropy
 from cs336_basics.optimizer import AdamW
 from cs336_basics.learningRateSchedule import learningRateSchedule
 from cs336_basics.gradientClip import gradientClip
+from cs336_basics.dataLoader import dataLoader
 
 
 def run_linear(
@@ -480,7 +481,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return dataLoader(dataset, batch_size, context_length, device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
