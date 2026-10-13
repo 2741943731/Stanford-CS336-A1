@@ -166,3 +166,5 @@ cython_debug/
 notes/adamw.md
 .gitignore
 notes/TEMPLATE.md
+/data
+/checkpoints

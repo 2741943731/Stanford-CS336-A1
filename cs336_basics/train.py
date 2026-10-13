@@ -18,7 +18,7 @@ from cs336_basics.checkPoint import load_checkpoint, save_checkpoint
 
 def buildOptimizer(model, lr, betas, eps, weight_decay):
     """
-    RMSnorm的权重不能衰减，所以要区分开
+    RMSnorm的权重不能衰减,所以要区分开
     """
     decay, no_decay = [], []
     for param in model.parameters():
@@ -87,11 +87,11 @@ def main():
     parser.add_argument("--cosine_cycle_iters", type=int, default=5000)
     # 学习率调度参数
 
-    parser.add_argument("--max_iters", type=int, default=5000)
-    parser.add_argument("--log_interval", type=int, default=10)
+    parser.add_argument("--max_iters", type=int, default=5)
+    parser.add_argument("--log_interval", type=int, default=1)
     parser.add_argument("--eval_interval", type=int, default=200)
     parser.add_argument("--save_interval", type=int, default=500)
-    parser.add_argument("--checkpoint_path", type=str, default="../checkpoints/model_checkpoint.pt")
+    parser.add_argument("--checkpoint_path", type=str, default="checkpoints/model_checkpoint.pt")
     parser.add_argument("--resume", default=False, action="store_true")
     # 训练参数
 
@@ -156,7 +156,7 @@ def main():
             elapsed = time.time() - t0
             print(f"Step {step}: train loss {ema:.4f}, time elapsed {elapsed:.2f}s, lr {lr:.6e}")
 
-        if step % args.eval_interval == 0:
+        if step % args.eval_interval == 0 and step > 0:
             val_loss = evaluate(model, valid_data, args.batch_size, args.context_length, device)
             elapsed = time.time() - t0
             print(f"Step {step}: train loss {ema:.4f}, valid loss {val_loss:.4f}, time elapsed {elapsed:.2f}s")

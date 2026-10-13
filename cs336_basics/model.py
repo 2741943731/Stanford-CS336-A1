@@ -109,3 +109,4 @@ class TransformerLM(nn.Module):
         # out = softmax(logits, dim=-1)
         # 损失函数会包含softmax
         return logits
+
