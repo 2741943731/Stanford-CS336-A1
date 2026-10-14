@@ -7,7 +7,7 @@ from cs336_basics.nn_utils import RoPE, Linear, RMSNorm, SwiGLU, Embedding, soft
 
 def ScaledDotProductAttention(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: torch.Tensor=None) -> torch.Tensor:
     d_k = q.shape[-1]
-    scores = torch.matmul(q, k.transpose(-2, -1)) / torch.sqrt(torch.tensor(d_k))
+    scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(torch.tensor(d_k))
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
     attention = torch.softmax(scores, dim=-1)
@@ -19,6 +19,7 @@ class CausalMultiHeadAttention(nn.Module):
         self.d_model = d_model
         self.num_heads = num_heads
         self.head_dim = d_model // num_heads
+        self.device = device
 
         self.Wq = nn.Parameter(torch.empty(self.d_model, self.d_model, device=device, dtype=dtype))
         self.Wk = nn.Parameter(torch.empty(self.d_model, self.d_model, device=device, dtype=dtype))
@@ -54,7 +55,7 @@ class CausalMultiHeadAttention(nn.Module):
             q = self.RoPE(q, token_positions)
             k = self.RoPE(k, token_positions)
 
-        mask = torch.tril(torch.ones(seq_len, seq_len), diagonal=0).bool()
+        mask = torch.tril(torch.ones(seq_len, seq_len), diagonal=0).bool().to(x.device)
         attention = ScaledDotProductAttention(q, k, v, mask)
         attention = rearrange(attention, "b n s d -> b s (n d)")
         attention = attention @ self.Wo.T

@@ -14,7 +14,7 @@ def save_checkpoint(model: nn.Module,
 def load_checkpoint(src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes],
                     model: nn.Module,
                     optimizer: torch.optim.Optimizer):
-    checkpoint = torch.load(src)
+    checkpoint = torch.load(src, map_location=torch.device('cpu'))
     model.load_state_dict(checkpoint['model.state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer.state_dict'])
     iter = checkpoint['iter']
