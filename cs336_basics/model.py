@@ -36,8 +36,18 @@ class CausalMultiHeadAttention(nn.Module):
         self.theta = theta
         self.RoPE = RoPE(self.theta, self.head_dim, self.max_seq_len, device) if theta is not None else None
 
-    def forward(self, x, token_positions=None) -> torch.Tensor:
+    def forward(self, x, token_positions=None, kv_cache=None, use_cache=False) -> torch.Tensor:
+        """
+        kv_cache tuple(k_cache, v_cache):
+            k_cache (batch, last_len, d_model)
+            v_cache (batch, last_len, d_model)
+        prefill:
+            x (batch, seq_len, d_model)
+        decode:
+            x (batck, 1, d_model)
+        """
         batch_size, seq_len, d_model = x.shape
+        last_len = 0 if kv_cache is None else kv_cache[0].shape[-2]
 
         q = x @ self.Wq.T
         k = x @ self.Wk.T
@@ -52,14 +62,29 @@ class CausalMultiHeadAttention(nn.Module):
             token_positions = torch.arange(seq_len).to(x.device)
 
         if self.RoPE is not None:
-            q = self.RoPE(q, token_positions)
-            k = self.RoPE(k, token_positions)
+            if kv_cache is not None:
+                q = self.RoPE(q, torch.ones(1, dtype=torch.long).to(x.device) * (last_len))
+                k = self.RoPE(k, torch.ones(1, dtype=torch.long).to(x.device) * (last_len))
+            else:
+                q = self.RoPE(q, token_positions)
+                k = self.RoPE(k, token_positions)
 
-        mask = torch.tril(torch.ones(seq_len, seq_len), diagonal=0).bool().to(x.device)
+        if kv_cache is not None:
+            k = torch.cat([kv_cache[0], k], dim=-2)
+            v = torch.cat([kv_cache[1], v], dim=-2)
+
+        mask = None
+        if kv_cache is None:
+            mask = torch.tril(torch.ones(seq_len, seq_len), diagonal=0).bool().to(x.device)
+        else:
+            mask = torch.ones(last_len + 1).bool().to(x.device)
         attention = ScaledDotProductAttention(q, k, v, mask)
         attention = rearrange(attention, "b n s d -> b s (n d)")
         attention = attention @ self.Wo.T
-        return attention
+        if use_cache:
+            return attention, (k, v)
+        else:
+            return attention
 
 class TransformerBlock(nn.Module):
     def __init__(self, d_model: int, num_heads: int, d_ff: int, max_seq_len: int, theta: float):
@@ -70,20 +95,27 @@ class TransformerBlock(nn.Module):
         self.max_seq_len = max_seq_len
         self.theta = theta
 
+        # self.kvcache = None
         self.causalMultiHeadSelfAttentionWithRoPE = CausalMultiHeadAttention(d_model, num_heads, max_seq_len, theta)
         self.ffn = SwiGLU(d_model, d_ff)
         self.norm1 = RMSNorm(d_model)
         self.norm2 = RMSNorm(d_model)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, cache=None, use_cache=False) -> torch.Tensor:
         out1 = self.norm1(x)
-        out1 = self.causalMultiHeadSelfAttentionWithRoPE(out1)
+        if use_cache:
+            out1, new_cache = self.causalMultiHeadSelfAttentionWithRoPE(x=out1, kv_cache=cache, use_cache=use_cache)
+        else:
+            out1 = self.causalMultiHeadSelfAttentionWithRoPE(x=out1)
         out1 = out1 + x
 
         out2 = self.norm2(out1)
         out2 = self.ffn(out2)
         out2 = out2 + out1
-        return out2
+        if use_cache:
+            return out2, new_cache
+        else:
+            return out2
 
 class TransformerLM(nn.Module):
     def __init__(self, vocab_size: int, context_length: int, d_model: int, num_layers: int, num_heads: int, d_ff: int, rope_theta: float):
@@ -96,15 +128,23 @@ class TransformerLM(nn.Module):
         self.d_ff = d_ff
         self.rope_theta = rope_theta
 
+        self.kvcache = None
         self.tokenEmbedding = Embedding(vocab_size, d_model)
         self.transformerBlocks = nn.ModuleList([TransformerBlock(d_model, num_heads, d_ff, context_length, rope_theta) for _ in range(num_layers)])
         self.norm = RMSNorm(d_model)
         self.outputEmbedding = Linear(d_model, vocab_size)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, use_cache=False) -> torch.Tensor:
         x = self.tokenEmbedding(x)
-        for layer in self.transformerBlocks:
-            x = layer(x)
+        if use_cache:
+            if self.kvcache is None:
+                self.kvcache = [None] * self.num_layers
+            for i, block in enumerate(self.transformerBlocks):
+                x, cache = block(x, self.kvcache[i], use_cache)
+                self.kvcache[i] = cache 
+        else:
+            for block in self.transformerBlocks:
+                x = block(x)
         x = self.norm(x)
         logits = self.outputEmbedding(x)
         # out = softmax(logits, dim=-1)

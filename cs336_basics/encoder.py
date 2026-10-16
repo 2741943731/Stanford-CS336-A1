@@ -40,7 +40,7 @@ if __name__ == "__main__":
     with open("merges.pkl", "rb") as f:
         merges = pickle.load(f)
     tokenizer = Tokenizer(vocab, merges, special_tokens=["<|endoftext|>"])
-    # n = encodeCorpus(tokenizer, "data/data/TinyStoriesV2-GPT4-train.txt", "data/data/encoded_TinyStoriesV2_GPT4_train.npy")
-    # print(f"encoded_TinyStoriesV2_GPT4_train.npy: {n:,} tokens, {n * 2 / 1e9:.2f} GB")
-    n = encodeCorpus(tokenizer, "data/data/TinyStoriesV2-GPT4-valid.txt", "data/data/encoded_TinyStoriesV2_GPT4_valid.npy")
-    print(f"encoded_TinyStoriesV2_GPT4_valid.npy: {n:,} tokens, {n * 2 / 1e9:.2f} GB")
+    n = encodeCorpus(tokenizer, "data/data/TinyStoriesV2-GPT4-train.txt", "data/data/encoded_TinyStoriesV2_GPT4_train.npy")
+    print(f"encoded_TinyStoriesV2_GPT4_train.npy: {n:,} tokens, {n * 2 / 1e9:.2f} GB")
+    t = encodeCorpus(tokenizer, "data/data/TinyStoriesV2-GPT4-valid.txt", "data/data/encoded_TinyStoriesV2_GPT4_valid.npy")
+    print(f"encoded_TinyStoriesV2_GPT4_valid.npy: {t:,} tokens, {t * 2 / 1e9:.2f} GB")

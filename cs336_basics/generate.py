@@ -30,6 +30,13 @@ def top_p_filtering(logits: torch.Tensor, top_p: float) -> torch.Tensor:
     out[sorted_indices] = sorted_logits
     return out / out.sum(dim=-1, keepdim=True)
 
+def _sample_next(logits, temperature, top_p):
+    next_logits = logits[0, -1, :] / temperature
+    probs = torch.softmax(next_logits, dim=-1)
+    if top_p is not None:
+        probs = top_p_filtering(probs, top_p)
+    return int(torch.multinomial(probs, num_samples=1))
+
 def generate(model,
              tokenizer,
              prompt: str,
@@ -37,25 +44,45 @@ def generate(model,
              max_length: int=200,
              top_p: float=1.0,
              end_token: str="<|endoftext|>",
+             use_cache: bool=False,
              device: torch.device="cpu") -> torch.Tensor:
+    
     model.eval()
-    input_ids = tokenizer.encode(prompt)
-    context_length = model.context_length
-    eos_id = tokenizer.encode(end_token)[0]
-
     with torch.no_grad():
-        for _ in range(max_length):
-            win = input_ids[-context_length:]
-            x = torch.tensor(win, dtype=torch.long).unsqueeze(0).to(device)
-            logits = model(x)
-            next_token_logits = logits[0, -1, :] / temperature
-            softmaxed_logits = torch.softmax(next_token_logits, dim=-1)
-            filtered_logits = top_p_filtering(softmaxed_logits, top_p)
-            next_id = int(torch.multinomial(filtered_logits, num_samples=1))
+        input_ids = tokenizer.encode(prompt)
+        context_length = model.context_length
+        eos_id = tokenizer.encode(end_token)[0]
 
-            if next_id == eos_id:
-                break;
-            input_ids.append(next_id)
+        remaining = context_length - len(input_ids)
+        if remaining <= 0:
+            raise ValueError(f"prompt 已占满上下文（{len(input_ids)} >= {context_length}）")
+        max_new = min(max_length, remaining)
+
+        if use_cache:
+            model.kvcache = [None] * model.num_layers
+            x = torch.tensor(input_ids, dtype=torch.long, device=device).unsqueeze(0)
+            logits = model(x, use_cache=True)
+            for _ in range(max_new):
+                next_id = _sample_next(logits, temperature, top_p)
+                if next_id == eos_id:
+                    break
+                input_ids.append(next_id)
+                x = torch.tensor([next_id], dtype=torch.long, device=device).unsqueeze(0)
+                logits = model(x, use_cache=True)
+
+        else:
+            for _ in range(max_length):
+                win = input_ids[-context_length:]
+                x = torch.tensor(win, dtype=torch.long).unsqueeze(0).to(device)
+                logits = model(x)
+                next_token_logits = logits[0, -1, :] / temperature
+                softmaxed_logits = torch.softmax(next_token_logits, dim=-1)
+                filtered_logits = top_p_filtering(softmaxed_logits, top_p)
+                next_id = int(torch.multinomial(filtered_logits, num_samples=1))
+
+                if next_id == eos_id:
+                    break;
+                input_ids.append(next_id)
 
     return tokenizer.decode(input_ids)
 
@@ -81,6 +108,7 @@ if __name__ == "__main__":
     model = TransformerLM(args.vocab_size, args.context_length, args.d_model, args.num_layers, args.num_heads, args.d_ff, args.rope_theta)
     tokenizer = Tokenizer(vocab, merges, ["<|endoftext|>"])
     weight = torch.load("checkpoints/model_checkpoint.pt", map_location=torch.device('cpu'))['model.state_dict']
+    # weight = torch.load("checkpoints/model_weights.pt")
     model.load_state_dict(weight)
 
     prompt = "One upon a time,"
